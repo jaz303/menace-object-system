@@ -1,9 +1,15 @@
 {
   "version": "0.0.0",
   "description": "prototype object system for a toy language",
+  "scripts": {
+    "test": "set -e; for t in test/*.js; do node $t; done"
+  },
   "main": "index.js",
   "repository": "",
   "author": "Jason Frame <jason@onehackoranother.com> (http://jasonframe.co.uk)",
   "license": "MIT",
-  "readmeFilename": "README.md"
+  "readmeFilename": "README.md",
+  "dependencies": {
+    "tape": "~2.13.4"
+  }
 }

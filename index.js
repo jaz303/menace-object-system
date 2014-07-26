@@ -1,88 +1,111 @@
-function mk_vtable() {
-    return {
-        vtable      : null,
-        entries     : null,
-        parent      : null
-    };
+function vtable() {
+	this.$vt = null;
+	this.entries = {};
+	this.parent = null;
 }
 
-function mk_object() {
-    return {
-        vtable      : null
-    };
+function object() {
+	this.$vt = null;
 }
 
-var vtable_vt = null;
-var object_vt = null;
-
-function bind(receiver, message) {
-    var vt = receiver.vtable;
-    return ((message === 'lookup') && (receiver === vtable_vt))
-            ? vtable_lookup(vt, message)
-            : send(vt, 'lookup', message);
+function closure() {
+	this.$vt = null;
+	this.method = null;
+	this.data = null;
 }
 
-function send(receiver, message, args) {
-    var method = bind(receiver, message);
-    if (method) {
-        args = Array.prototype.slice.call(arguments, 0);
-        args.splice(1, 1);
-        return method.apply(null, args);
-    } else {
-        throw "unknown method: " + message;
-    }
+function symbol() {
+	this.$vt = null;
+	this.str = null;
 }
 
-function vtable_allocate(self) {
-    var obj = mk_object();
-    obj.vtable = self;
-    return obj;
+function make_object() {
+	return new object();
 }
 
-function vtable_delegated(self) {
-    var child = mk_vtable();
-    child.vtable = self ? self.vtable : null;
-    child.entries = {};
-    child.parent = self;
-    return child;
+function make_symbol(str) {
+	var sym = new symbol();
+	sym.$vt = symbol_vt;
+	sym.str = str;
+	return sym;
 }
 
-function vtable_add_method(self, name, method) {
-    self.entries[name] = method;
+function make_closure(method, data) {
+	var clo = new closure();
+	clo.$vt = closure_vt;
+	clo.method = method;
+	clo.data = data;
+	return clo;
 }
 
-function vtable_lookup(self, name) {
-    if (name in self.entries)
-        return self.entries[name];
-    if (self.parent)
-        return send(self.parent, 'lookup', name);
-    console.log("lookup failed: " + name);
-    return null;
+function vtable_delegated(closure, self) {
+	var child = new vtable();
+	child.$vt = self ? self.$vt : null;
+	child.parent = self;
+	return child;
 }
 
-vtable_vt = vtable_delegated(null);
-vtable_vt.vtable = vtable_vt;
+function vtable_allocate(closure, self) {
+	var obj = new vtable();
+	obj.$vt = self;
+	return obj;
+}
 
-object_vt = vtable_delegated(null);
-object_vt.vtable = vtable_vt;
+function vtable_add_method(closure, self, key, method) {
+	self.entries[key.str] = make_closure(method, null);
+	return method;
+}
+
+function vtable_lookup(closure, self, key) {
+	if (key.str in self.entries) {
+		return self.entries[key.str];
+	} else {
+		throw new Error("unknown key in vtable: " + key.str);
+	}
+}
+
+var symbols = {};
+
+function symbol_intern(closure, self, str) {
+	if (symbols[str]) {
+		return symbols[str];
+	} else {
+		var sym = make_symbol(str);
+		symbols[str] = sym;
+		return sym;
+	}
+}
+
+var vtable_vt = vtable_delegated(null, null);
+vtable_vt.$vt = vtable_vt;
+
+var object_vt = vtable_delegated(null, null);
+object_vt.$vt = vtable_vt;
 vtable_vt.parent = object_vt;
 
-vtable_add_method(vtable_vt, 'lookup', vtable_lookup);
-vtable_add_method(vtable_vt, 'addMethod', vtable_add_method);
+var symbol_vt = vtable_delegated(null, object_vt);
+var closure_vt = vtable_delegated(null, object_vt);
 
-send(vtable_vt, 'addMethod', 'allocate', vtable_allocate);
-send(vtable_vt, 'addMethod', 'delegated', vtable_delegated);
+var s_addMethod	= symbol_intern(null, null, 'addMethod');
+var s_allocate	= symbol_intern(null, null, 'allocate');
+var s_delegated	= symbol_intern(null, null, 'delegated');
+var s_lookup	= symbol_intern(null, null, 'lookup');
 
-var sub_vt = send(vtable_vt, 'delegated');
+vtable_add_method(null, vtable_vt, s_lookup, vtable_lookup);
+vtable_add_method(null, vtable_vt, s_addMethod, vtable_add_method);
+vtable_add_method(null, vtable_vt, s_allocate, vtable_allocate);
+vtable_add_method(null, vtable_vt, s_delegated, vtable_delegated);
 
-send(sub_vt, 'addMethod', 'lookup', function(self, method) {
-    return function(self) { return "this method is called " + method; }
-});
+exports.vtable_vt		= vtable_vt;
+exports.object_vt		= object_vt;
+exports.symbol_vt 		= symbol_vt;
+exports.closure_vt		= closure_vt;
 
-send(sub_vt, 'addMethod', 'foobar', function(self, a, b) {
-    return a + b;
-});
+exports.s_addMethod		= s_addMethod;
+exports.s_allocate		= s_allocate;
+exports.s_delegated		= s_delegated;
+exports.s_lookup 		= s_lookup;
 
-var instance = send(sub_vt, 'allocate');
+exports.vtable_lookup	= vtable_lookup;
 
-console.log(send(instance, 'foobar', 1, 2));
+exports.make_object 	= make_object;
